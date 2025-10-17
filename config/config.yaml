@@ -1,0 +1,87 @@
+# Predictive Maintenance System Configuration
+
+# Data Generation Settings
+data_generation:
+  total_samples: 10000
+  normal_ratio: 0.70
+  degradation_ratio: 0.25
+  failure_ratio: 0.05
+  sampling_interval_seconds: 60
+  seed: 42
+
+# Equipment Parameters
+equipment:
+  types:
+    - Motor
+    - Pump
+    - Compressor
+    - Conveyor
+  
+  thresholds:
+    temperature_critical: 95  # °C
+    vibration_critical: 8     # mm/s
+    pressure_low: 3           # Bar
+    pressure_high: 12         # Bar
+    rpm_low: 500              # RPM
+    rpm_high: 3500            # RPM
+    power_critical: 70        # kW
+    acoustic_critical: 95     # dB
+
+# Model Training Settings
+model_training:
+  test_size: 0.2
+  validation_size: 0.1
+  random_state: 42
+  
+  failure_predictor:
+    type: xgboost  # Options: random_forest, xgboost, lightgbm, ensemble
+    n_estimators: 200
+    max_depth: 8
+    learning_rate: 0.1
+  
+  anomaly_detector:
+    contamination: 0.1
+    n_estimators: 100
+
+# Edge Inference Settings
+edge_inference:
+  thresholds:
+    anomaly_score: -0.5
+    failure_probability: 0.70
+    critical_failure_probability: 0.90
+    rul_critical: 50  # hours
+  
+  performance:
+    max_inference_time_ms: 100
+    batch_size: 32
+
+# Monitoring Dashboard
+monitoring:
+  port: 8050
+  host: "0.0.0.0"
+  debug: false
+  update_interval_seconds: 5
+  
+  alerts:
+    email_enabled: false
+    slack_enabled: false
+    sms_enabled: false
+
+# Logging Settings
+logging:
+  level: INFO  # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: logs/predictive_maintenance.log
+  console: true
+
+# Paths
+paths:
+  data:
+    raw: data/raw
+    synthetic: data/synthetic
+    processed: data/processed
+  models:
+    saved: models/saved_models
+    optimized: models/edge_optimized
+  logs: logs
+  config: config
