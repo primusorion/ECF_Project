@@ -1,0 +1,28 @@
+# Inference-optimized Dockerfile (smaller image)
+FROM python:3.10-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+WORKDIR /app
+
+# Install system deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libglib2.0-0 \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy minimal requirements and install
+COPY requirements.inference.txt /app/requirements.inference.txt
+RUN pip install --upgrade pip setuptools wheel
+RUN pip install --no-cache-dir -r /app/requirements.inference.txt
+
+# Copy only necessary files
+COPY src/ /app/src/
+COPY main.py /app/main.py
+COPY config/ /app/config/
+
+EXPOSE 8050
+# Default to inference mode for the smaller image. If you want the dashboard,
+# run the container with: `docker run -p 8050:8050 pm-edge-inference:latest python main.py --mode monitor`
+CMD ["python", "main.py", "--mode", "infer"]

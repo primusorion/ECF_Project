@@ -13,6 +13,7 @@ This project implements an end-to-end **Predictive Maintenance System** for fact
 - **Alert System**: Automated notifications for detected anomalies and predicted failures
 - **Interactive Dashboard**: Real-time visualization of equipment health and predictions
 - **Data Generation**: Synthetic sensor data generator for testing and development
+- **🐳 Docker Support**: Fully containerized with images available on Docker Hub for easy deployment
 
 ## 🏗️ Architecture
 
@@ -98,6 +99,24 @@ python -m venv venv
 ```bash
 pip install -r requirements.txt
 ```
+
+### 🐳 Option 2: Run with Docker (Recommended)
+
+**Pull and run from Docker Hub:**
+
+```bash
+# Run the full system with dashboard
+docker run -p 8050:8050 erenyeager471/pm-edge:latest
+
+# Or run inference-only (smaller image)
+docker run -p 8052:8050 erenyeager471/pm-edge-inference:latest
+```
+
+**See [DOCKER_RUN_GUIDE.md](DOCKER_RUN_GUIDE.md) for complete Docker instructions.**
+
+Docker Hub Images:
+- Full Image: `erenyeager471/pm-edge:latest`
+- Inference Image: `erenyeager471/pm-edge-inference:latest`
 
 ### Usage
 

@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  inference:
+    image: pm-edge-inference:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.inference
+    ports:
+      - "8052:8050"
+    volumes:
+      - ./models/saved_models:/app/models/saved_models:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python main.py --mode infer
+    restart: unless-stopped
