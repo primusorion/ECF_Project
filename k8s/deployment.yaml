@@ -1,0 +1,276 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: predictive-maintenance
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pm-config
+  namespace: predictive-maintenance
+data:
+  DATABASE_URL: postgresql://postgres:postgres@timescaledb:5432/predictive_maintenance
+  MQTT_BROKER_HOST: mqtt-broker
+  MQTT_BROKER_PORT: "1883"
+  API_PORT: "8000"
+  DASHBOARD_PORT: "8050"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pm-secrets
+  namespace: predictive-maintenance
+type: Opaque
+stringData:
+  db-password: postgres
+  mqtt-username: pm-user
+  mqtt-password: pm-password
+  jwt-secret: your-secret-key-here
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pm-api
+  namespace: predictive-maintenance
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: pm-api
+  template:
+    metadata:
+      labels:
+        app: pm-api
+    spec:
+      containers:
+      - name: api
+        image: erenyeager471/pm-edge:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: pm-config
+              key: DATABASE_URL
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: pm-secrets
+              key: jwt-secret
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pm-api
+  namespace: predictive-maintenance
+spec:
+  selector:
+    app: pm-api
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+  type: LoadBalancer
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pm-dashboard
+  namespace: predictive-maintenance
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pm-dashboard
+  template:
+    metadata:
+      labels:
+        app: pm-dashboard
+    spec:
+      containers:
+      - name: dashboard
+        image: erenyeager471/pm-edge:latest
+        command: ["python", "main.py", "--mode", "monitor"]
+        ports:
+        - containerPort: 8050
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: pm-config
+              key: DATABASE_URL
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pm-dashboard
+  namespace: predictive-maintenance
+spec:
+  selector:
+    app: pm-dashboard
+  ports:
+    - protocol: TCP
+      port: 8050
+      targetPort: 8050
+  type: LoadBalancer
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: timescaledb
+  namespace: predictive-maintenance
+spec:
+  serviceName: timescaledb
+  replicas: 1
+  selector:
+    matchLabels:
+      app: timescaledb
+  template:
+    metadata:
+      labels:
+        app: timescaledb
+    spec:
+      containers:
+      - name: timescaledb
+        image: timescale/timescaledb:latest-pg15
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pm-secrets
+              key: db-password
+        - name: POSTGRES_DB
+          value: predictive_maintenance
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 50Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: timescaledb
+  namespace: predictive-maintenance
+spec:
+  selector:
+    app: timescaledb
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+  clusterIP: None
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pm-ingress
+  namespace: predictive-maintenance
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls:
+  - hosts:
+    - api.predictive-maintenance.example.com
+    - dashboard.predictive-maintenance.example.com
+    secretName: pm-tls-secret
+  rules:
+  - host: api.predictive-maintenance.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: pm-api
+            port:
+              number: 8000
+  - host: dashboard.predictive-maintenance.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: pm-dashboard
+            port:
+              number: 8050
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: pm-api-hpa
+  namespace: predictive-maintenance
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: pm-api
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
